@@ -1,32 +1,30 @@
 
-import { StyleSheet, Text, TouchableOpacity, View,StatusBar } from "react-native";
-import React, { useEffect,useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View, StatusBar, Modal, ActivityIndicator, FlatList } from "react-native";
+import React, { useEffect, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { BASE_URL } from "../api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import RNZebraBluetoothPrinter from 'react-native-zebra-bluetooth-printer';
+import { Alert } from "react-native";
 
 const PrintScreen = ({ route }) => {
 
-  const { data } = route.params;
-  const { hu } = route.params;
+  const { data, hu } = route.params;
 
   const [username, setUsername] = useState(null);
   const [password, setPassword] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation()
 
 
-   const convertDate = (sapDate )=>{
-      
-      let year = sapDate.substr(0, 4);
-      let month = sapDate.substr(4, 2);
-      let day = sapDate.substr(6, 2);
+  const convertDate = (sapDate) => {
+    let year = sapDate.substr(0, 4);
+    let month = sapDate.substr(4, 2);
+    let day = sapDate.substr(6, 2);
 
-
-      return `${day}.${month}.${year}`;
-
-   };
+    return `${day}.${month}.${year}`;
+  };
 
   const getLocaldata = async () => {
     const username = await AsyncStorage.getItem("username").then((data) => {
@@ -37,42 +35,36 @@ const PrintScreen = ({ route }) => {
     );
   };
 
-  const fetch = async () => {
-   try {
-     
-    console.log(`${BASE_URL}&EXIDV=${hu}`);
-    const printData = await axios.post(`${BASE_URL}&EXIDV=${hu}`,{},
-    {
+  const printRequest = async () => {
+    try {
+      setIsLoading(true);
+      // console.log(`${BASE_URL}&EXIDV=${hu}`);
+      const printData = await axios.post(`${BASE_URL}&EXIDV=${hu}`, {},
+        {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+          },
+          auth: {
+            username: username,
+            password: password,
+          },
+        });
 
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
-      auth: {
-        username: username,
-        password: password,
-      },
+      alert(`Teyit veildi.Batch :${printData.data.acharg}`);
 
-    });
-    
-    alert(`Teyit veildi.Batch :${printData.data.acharg}`);
+      const pairedDevices = await RNZebraBluetoothPrinter.pairedDevices();
+      let deviceAddress = "";
+      let deviceEnergy = "";
 
-    const pairedDevices =  await RNZebraBluetoothPrinter.pairedDevices();
-    let deviceAddress ="";
-    let deviceEnergy ="";
+      pairedDevices.forEach((device) => {
+        if (device.name.startsWith('MM0')) {
+          deviceAddress = device.address;
+          deviceEnergy = device.energy;
+        }
+      });
 
-    pairedDevices.forEach((device) => {
-      
-      if(device.name.startsWith('MM0'))
-      {
-        deviceAddress = device.address;
-        deviceEnergy = device.energy;
-      }
-      
-    });
-
-  
-    const zpl = `^XA
+      const zpl = `^XA
                 ~TA000
                 ~JSN
                 ^LT0
@@ -100,68 +92,107 @@ const PrintScreen = ({ route }) => {
                 ^FT326,358^A0N,68,68^FH\^CI28^FD${printData.data.erfmg}^FS^CI27
                 ^FT641,61^A0N,34,33^FH\^CI28^FD${convertDate(printData.data.proddate)}^FS^CI27
                 ^FT68,61^A0N,34,33^FH\^CI28^FD${printData.data.belnr}^FS^CI27
-                ^FT467,348^A0N,34,33^FH\^CI28^F${printData.data.erfme === "ST" ? "ADT" : printData.data.erfme  }^FS^CI27
+                ^FT467,348^A0N,34,33^FH\^CI28^F${printData.data.erfme === "ST" ? "ADT" : printData.data.erfme}^FS^CI27
                 ^PQ1,0,1,Y
-                ^XZ`; 
+                ^XZ`;
 
-    if (deviceAddress !== "")
-    {            
-     await RNZebraBluetoothPrinter.print(deviceAddress,zpl,deviceEnergy);
-    }else {
-      alert('Printer Bulunamadı.');
+      if (deviceAddress !== "") {
+        await RNZebraBluetoothPrinter.print(deviceAddress, zpl, deviceEnergy);
+      } else {
+        alert('Printer Bulunamadı.');
+      }
+      navigation.navigate("HU");
+
+    } catch (error) {
+      Alert.alert(
+        "Hata",
+        error.response.data.error,
+        [
+          {
+            text: "Tamam",
+            onPress: () => navigation.navigate("HU"),
+            style: "cancel"
+          },
+        ],
+        { cancelable: false }
+      );
     }
-    navigation.navigate("HU");
+    finally {
+      setIsLoading(false);
+    }
 
-   } catch (error) {
-    alert(error.response.data.error);
-    navigation.navigate("HU");
-   }
-     
   }
 
   useEffect(() => {
     getLocaldata();
-  },[]);
+  }, []);
+
+
+  function DataListItem({ title, data }) {
+    return (
+      <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#ddd' }}>
+        <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>{title}</Text>
+        <Text>{data}</Text>
+      </View>
+    );
+  }
+
+  const dataList = [
+    { title: 'Tanımı', data: data?.maktx },
+    { title: 'Numarası', data: data?.matnr },
+    { title: 'Miktar', data: data?.erfmg },
+    { title: 'Birim', data: data?.erfme === "ST" ? "ADT" : data?.erfme },
+  ];
+
   return (
     <View style={styles.container}>
-        <View>
 
-        </View>
-      <Text>
-        Tanımı: {data?.maktx}
-      </Text>
-      <Text>
-        Numarası: {data?.matnr}
-      </Text>
-      <Text>
-       Miktar: {data?.erfmg}
-      </Text>
-      <Text>
-       Birim: {data?.erfme === "ST" ? "ADT" : data?.erfme}
-      </Text>
-      <View
-      style={styles.ButtonContainer}
-      >
-
+      <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Bilgiler</Text>
+      <View>
+        <FlatList
+          data={dataList}
+          renderItem={({ item }) => <DataListItem title={item.title} data={item.data} />}
+          keyExtractor={item => item.title}
+        />
+      </View>
+      <View style={styles.ButtonContainer}>
         <TouchableOpacity
-        style={[styles.button,{backgroundColor:'red'}]}
-        onPress={() => navigation.goBack()}
+          style={[styles.button, { backgroundColor: 'red' }]}
+          onPress={() => navigation.goBack()}
         >
-             <Text style={{color:'white'}}>Geri</Text>
+          <Text style={{ color: 'white' }}>Geri</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
-        style={[styles.button,{backgroundColor:'green'}]}
-        onPress={() => {
-            fetch()
-        }}
+          style={[styles.button, { backgroundColor: 'green' }]}
+          onPress={() => {
+            printRequest()
+          }}
         >
-            <Text style={{color:'white'}}>Yazdır</Text>
-
+          <Text style={{ color: 'white' }}>Yazdır</Text>
         </TouchableOpacity>
       </View>
 
       <StatusBar style="auto" />
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isLoading}
+        onRequestClose={() => {
+          setIsLoading(false);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+        >
+          <Text style={{ color: "white", fontSize: 22 }}>Yazdırılıyor...</Text>
+          <ActivityIndicator size="large" color="blue" />
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -169,21 +200,22 @@ const PrintScreen = ({ route }) => {
 export default PrintScreen;
 
 const styles = StyleSheet.create({
-    container:{
-        flex:1,
-        justifyContent:'center',
-        alignItems:'center'
-    },
-    button:{
-        width:150,
-        height:50,
-        borderRadius:50,
-        justifyContent:'center',
-        alignItems:'center',
-        marginRight:10
-    },
-    ButtonContainer:{
-        flexDirection:'row',
-        marginTop:35
-    }
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  button: {
+    width: 150,
+    height: 50,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10
+  },
+  ButtonContainer: {
+    flexDirection: 'row',
+    marginTop: 35,
+    paddingVertical: 10,
+  },
 });
