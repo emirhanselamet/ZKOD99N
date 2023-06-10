@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TextInput,TouchableOpacity,StatusBar } from "react-native";
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, StatusBar, Modal, ActivityIndicator, Image } from "react-native";
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { BASE_URL } from "../api";
@@ -10,8 +10,10 @@ const HuScreen = () => {
   const [error, setError] = useState(null);
   const [username, setUsername] = useState(null);
   const [password, setPassword] = useState(null);
-  const [data,setData] = useState({})
+  const [data, setData] = useState({})
+  const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation()
+
   const getLocaldata = async () => {
     const username = await AsyncStorage.getItem("username").then((data) => {
       setUsername(data);
@@ -20,8 +22,10 @@ const HuScreen = () => {
       setPassword(data)
     );
   };
-  const fetch = async () => {
+
+  const fetchDataFromSap = async () => {
     try {
+      setIsLoading(true);
       const data = await axios.get(`${BASE_URL}&EXIDV=${value}`, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -32,17 +36,19 @@ const HuScreen = () => {
           password: password,
         },
       });
-
-    setData(data.data)
-    setError(null);
-    navigation.navigate('Print',{
+      setData(data.data)
+      setError(null);
+      navigation.navigate('Print', {
         data: data.data,
         hu: value
-    })
-    setValue('')
+      })
+      setValue('')
     } catch (error) {
       console.log(error);
       setError(error.response.data.error);
+    }
+    finally {
+      setIsLoading(false)
     }
   };
   useEffect(() => {
@@ -50,11 +56,13 @@ const HuScreen = () => {
     setError(null);
   }, []);
 
-  const  handleKeyPress = ({ nativeEvent: { key: keyValue } }) => {
-   // alert(keyValue)
-};
+  
   return (
     <View style={styles.container}>
+      <Image
+        source={require('../assets/marelli-logo-history.png')}
+        style={{ width: 200, height: 200 }}
+      />
       {error ? <Text style={{ color: "red" }}>{error}</Text> : null}
       {username ? (
         <Text>
@@ -62,7 +70,7 @@ const HuScreen = () => {
           Olarak Giriş Yapıldı
         </Text>
       ) : null}
-     
+
       <TextInput
         value={value}
         autoFocus={true}
@@ -70,9 +78,8 @@ const HuScreen = () => {
         placeholder="HU Numarası Giriniz"
         style={styles.input}
         keyboardType="numeric"
-        onKeyPress={handleKeyPress}
       />
-       <TouchableOpacity
+      <TouchableOpacity
         style={{
           width: 250,
           height: 55,
@@ -85,13 +92,36 @@ const HuScreen = () => {
           if (value === '') {
             alert("Tüm alanları doldur");
           } else {
-            fetch()
+            fetchDataFromSap()
           }
         }}
       >
         <Text style={{ color: "white" }}>Tamamla</Text>
       </TouchableOpacity>
-     
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isLoading}
+        onRequestClose={() => {
+          setIsLoading(false);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+        >
+          <Text>
+            Lütfen Bekleyiniz...
+          </Text>
+          <ActivityIndicator size="large" color="blue" />
+        </View>
+      </Modal>
+
+
       <StatusBar style="auto" />
     </View>
   );
